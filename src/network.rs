@@ -236,7 +236,11 @@ impl NetworkEntry {
             s.replace('\'', "'\\''")
         }
         let req = &self.request;
-        let mut parts = vec![format!("curl -X {}", req.method)];
+        // The method is interpolated into a shell command line, so it must be
+        // quoted like every other captured value. BiDi delivers it as a
+        // string; a non-standard method from a hostile or buggy endpoint
+        // must not become extra shell arguments.
+        let mut parts = vec![format!("curl -X '{}'", shell_quote(&req.method))];
         for h in &req.headers {
             if h.name.eq_ignore_ascii_case("host")
                 || h.name.eq_ignore_ascii_case("connection")
@@ -1788,7 +1792,7 @@ mod tests {
             error: None,
         };
         let curl = entry.to_curl();
-        assert!(curl.starts_with("curl -X POST"));
+        assert!(curl.starts_with("curl -X 'POST'"));
         assert!(curl.contains("-H 'Content-Type: application/json'"));
         assert!(!curl.contains("Host")); // stripped
         assert!(curl.contains(r#"-d '{"user":"admin"}'"#));
@@ -2276,7 +2280,7 @@ mod tests {
             error: None,
         };
         let curl = entry.to_curl();
-        assert_eq!(curl, "curl -X GET 'https://example.com'");
+        assert_eq!(curl, "curl -X 'GET' 'https://example.com'");
     }
 
     #[tokio::test]
@@ -3974,7 +3978,7 @@ mod tests {
             response: None,
             error: None,
         };
-        assert!(entry.to_curl().starts_with("curl -X DELETE"));
+        assert!(entry.to_curl().starts_with("curl -X 'DELETE'"));
     }
 
     #[tokio::test]
@@ -5248,7 +5252,7 @@ mod tests {
         };
         let curl = entry.to_curl();
         assert!(!curl.contains("-d"));
-        assert!(curl.contains("curl -X GET"));
+        assert!(curl.contains("curl -X 'GET'"));
     }
 
     #[tokio::test]
@@ -6425,7 +6429,7 @@ mod tests {
             error: None,
         };
         let curl = entry.to_curl();
-        assert!(curl.contains("-X POST"));
+        assert!(curl.contains("-X 'POST'"));
         assert!(curl.contains("-H 'Content-Type: application/json'"));
         assert!(curl.contains(r#"-d '{"key":"val"}'"#));
     }
