@@ -1,14 +1,20 @@
 [package]
 name = "runtime-foxdriver"
-version = "0.1.2"
+version = "0.1.4"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
-authors = ["Santh Project <contact@santh.dev>"]
+authors = ["Santh <64453045+santhreal@users.noreply.github.com>"]
 description = "Firefox browser automation via WebDriver BiDi (rustenium)"
-repository = "https://github.com/santhreal/santh"
+repository = "https://github.com/santhreal/runtime-foxdriver"
+homepage = "https://santh.dev"
+documentation = "https://docs.rs/runtime-foxdriver"
+readme = "README.md"
 keywords = ["firefox", "browser", "bidi", "webdriver", "automation"]
 categories = ["web-programming", "network-programming"]
+
+[package.metadata.santh]
+status = "beta"
 
 [dependencies]
 anyhow = "1"

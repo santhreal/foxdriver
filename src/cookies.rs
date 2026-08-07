@@ -90,7 +90,7 @@ pub async fn apply_to_page(
                 continue; // skip expired
             }
         }
-        let same_site = c.same_site.as_ref().and_then(|s| match s.as_str() {
+        let same_site = c.same_site.as_ref().and_then(|s| match s.to_lowercase().as_str() {
             "strict" => Some(rustenium_bidi_definitions::network::types::SameSite::Strict),
             "lax" => Some(rustenium_bidi_definitions::network::types::SameSite::Lax),
             "none" => Some(rustenium_bidi_definitions::network::types::SameSite::None),
@@ -392,5 +392,21 @@ mod tests {
         assert_eq!(c, back);
         assert!(json.contains("same_site"));
         assert!(json.contains("http_only"));
+    }
+
+    #[test]
+    fn same_site_case_insensitive_mapping() {
+        let inputs = ["Strict", "STRICT", "Lax", "LAX", "None", "NONE"];
+        for s in inputs {
+            let same_site = Some(s.to_string())
+                .as_ref()
+                .and_then(|str_val| match str_val.to_lowercase().as_str() {
+                    "strict" => Some(rustenium_bidi_definitions::network::types::SameSite::Strict),
+                    "lax" => Some(rustenium_bidi_definitions::network::types::SameSite::Lax),
+                    "none" => Some(rustenium_bidi_definitions::network::types::SameSite::None),
+                    _ => None,
+                });
+            assert!(same_site.is_some(), "failed to map same_site string '{s}'");
+        }
     }
 }

@@ -252,10 +252,17 @@ fn bidi_wire_value_to_json(v: &serde_json::Value) -> serde_json::Value {
             let mut map = serde_json::Map::new();
             if let Some(serde_json::Value::Array(pairs)) = v.get("value") {
                 for pair in pairs {
-                    if let Some(serde_json::Value::Array(items)) = Some(pair) {
+                    if let serde_json::Value::Array(items) = pair {
                         if items.len() >= 2 {
-                            if let (Some(k), Some(val)) = (items[0].as_str(), items.get(1)) {
-                                map.insert(k.to_string(), bidi_wire_value_to_json(val));
+                            let key_opt = items[0].as_str().map(String::from).or_else(|| {
+                                match bidi_wire_value_to_json(&items[0]) {
+                                    serde_json::Value::String(s) => Some(s),
+                                    serde_json::Value::Number(n) => Some(n.to_string()),
+                                    _ => None,
+                                }
+                            });
+                            if let (Some(k), Some(val)) = (key_opt, items.get(1)) {
+                                map.insert(k, bidi_wire_value_to_json(val));
                             }
                         }
                     }
@@ -311,13 +318,20 @@ fn remote_value_to_json(rv: &RemoteValue) -> serde_json::Value {
         }
         RemoteValue::ObjectRemoteValue(o) => {
             let mut map = serde_json::Map::new();
-            if let Some(ref mapping) = o.value {
+            if let Some(mapping) = &o.value {
                 for pair in mapping.inner() {
                     if pair.len() >= 2 {
-                        if let (Some(serde_json::Value::String(k)), Some(v)) =
-                            (pair.first(), pair.get(1))
-                        {
-                            map.insert(k.clone(), bidi_wire_value_to_json(v));
+                        let key_opt = match pair.first() {
+                            Some(serde_json::Value::String(k)) => Some(k.clone()),
+                            Some(v) => match bidi_wire_value_to_json(v) {
+                                serde_json::Value::String(s) => Some(s),
+                                serde_json::Value::Number(n) => Some(n.to_string()),
+                                _ => None,
+                            },
+                            None => None,
+                        };
+                        if let (Some(k), Some(v)) = (key_opt, pair.get(1)) {
+                            map.insert(k, bidi_wire_value_to_json(v));
                         }
                     }
                 }
@@ -1847,7 +1861,7 @@ pub async fn launch_firefox(mut config: FoxBrowserConfig) -> Result<Page> {
         let profile_dir = config
             .profile_dir
             .as_deref()
-            .expect("profile_dir synthesized above when missing");
+            .ok_or_else(|| anyhow!("profile_dir missing when writing user.js"))?;
         // Fail closed: a stealth/proxy pref that does not get written produces a
         // detectable, potentially IP-leaking browser (surface it, never continue).
         write_user_js(profile_dir, &user_js)
@@ -2385,6 +2399,37 @@ mod tests {
         let rv = RemoteValue::ObjectRemoteValue(obj);
         let out = remote_value_to_json(&rv);
         assert_eq!(out["key"], "val");
+    }
+
+    #[test]
+    fn rv_object_value_wire_key() {
+        let obj = ObjectRemoteValue {
+            r#type: ObjectRemoteValueType::Object,
+            handle: None,
+            internal_id: None,
+            value: Some(MappingRemoteValue::new(vec![vec![
+                serde_json::json!({"type": "string", "value": "key"}),
+                serde_json::json!({"type": "string", "value": "val"}),
+            ]])),
+        };
+        let rv = RemoteValue::ObjectRemoteValue(obj);
+        let out = remote_value_to_json(&rv);
+        assert_eq!(out["key"], "val");
+    }
+
+    #[test]
+    fn bidi_wire_value_to_json_object_wire_key() {
+        let raw = serde_json::json!({
+            "type": "object",
+            "value": [
+                [
+                    {"type": "string", "value": "wire_key"},
+                    {"type": "number", "value": 42}
+                ]
+            ]
+        });
+        let out = bidi_wire_value_to_json(&raw);
+        assert_eq!(out["wire_key"], 42);
     }
 
     #[test]
